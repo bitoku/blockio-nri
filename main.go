@@ -10,12 +10,14 @@ import (
 
 	"github.com/containerd/nri/pkg/stub"
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/yaml"
 )
 
 var (
 	pluginName = flag.String("plugin-name", "nri-iops", "NRI plugin name")
 	pluginIdx  = flag.String("plugin-idx", "90", "NRI plugin index")
 	logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	configFile = flag.String("config", "", "Path to config file (used when running as external plugin)")
 )
 
 func main() {
@@ -29,6 +31,21 @@ func main() {
 	log.SetLevel(level)
 
 	p := &IOPSPlugin{log: log}
+
+	if *configFile != "" {
+		data, err := os.ReadFile(*configFile)
+		if err != nil {
+			log.WithError(err).Fatal("failed to read config file")
+		}
+		var cfg PluginConfig
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			log.WithError(err).Fatal("failed to parse config file")
+		}
+		p.config = cfg
+		if err := applyBlockIOConfig(cfg); err != nil {
+			log.WithError(err).Fatal("failed to apply blockio config")
+		}
+	}
 
 	opts := []stub.Option{
 		stub.WithPluginName(*pluginName),

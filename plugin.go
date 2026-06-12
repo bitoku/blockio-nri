@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/containerd/nri/pkg/api"
-	"github.com/containerd/nri/pkg/stub"
 	nriplugin "github.com/containerd/nri/pkg/plugin"
+	"github.com/containerd/nri/pkg/stub"
+	"github.com/intel/goresctrl/pkg/blockio"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,14 +23,19 @@ func (p *IOPSPlugin) Configure(_ context.Context, config, runtime, version strin
 		"version": version,
 	}).Info("configuring plugin")
 
-	cfg, err := parseConfig(config)
-	if err != nil {
-		return 0, err
+	if config != "" {
+		cfg, err := parseConfig(config)
+		if err != nil {
+			return 0, err
+		}
+		p.config = cfg
+		if err := applyBlockIOConfig(cfg); err != nil {
+			return 0, err
+		}
 	}
-	p.config = cfg
 
-	if cfg.LogLevel != "" {
-		level, err := logrus.ParseLevel(cfg.LogLevel)
+	if p.config.LogLevel != "" {
+		level, err := logrus.ParseLevel(p.config.LogLevel)
 		if err == nil {
 			p.log.SetLevel(level)
 		}
@@ -103,39 +110,20 @@ func (p *IOPSPlugin) CreateContainer(_ context.Context, pod *api.PodSandbox, ctr
 }
 
 func (p *IOPSPlugin) buildIOMax(pod *api.PodSandbox, containerName string) (string, error) {
-	annotation, ok := nriplugin.GetEffectiveAnnotation(pod, AnnotationKey, containerName)
+	className, ok := nriplugin.GetEffectiveAnnotation(pod, AnnotationKey, containerName)
 	if !ok {
 		return "", nil
 	}
 
-	limits, err := parseIOLimits(annotation)
+	className = strings.TrimSpace(className)
+	if className == "" {
+		return "", nil
+	}
+
+	lbio, err := blockio.OciLinuxBlockIO(className)
 	if err != nil {
 		return "", err
 	}
 
-	var entries []string
-	for _, dev := range limits.Devices {
-		path := dev.Path
-		if path == "" {
-			path = p.config.DefaultDevice
-		}
-		if path == "" {
-			p.log.Warn("device has no path and no default device configured, skipping")
-			continue
-		}
-
-		major, minor, err := resolveDevice(path)
-		if err != nil {
-			p.log.WithError(err).WithField("device", path).Warn("failed to resolve device, skipping")
-			continue
-		}
-
-		entries = append(entries, formatIOMax(major, minor, dev))
-	}
-
-	if len(entries) == 0 {
-		return "", nil
-	}
-
-	return formatIOMaxMultiDevice(entries), nil
+	return formatIOMaxFromOCI(lbio), nil
 }

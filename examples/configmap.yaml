@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nri-iops-config
+data:
+  nri-iops.conf: |
+    # Whether to block container creation when the annotation
+    # references an unknown class. Default: false (log warning only).
+    failOnInvalidAnnotation: true
+
+    # Log level: debug, info, warn, error
+    logLevel: info
+
+    # Block I/O classes in goresctrl format.
+    # Pod annotations reference these class names.
+    Classes:
+      LowPrioThrottled:
+        - Devices:
+            - /dev/sd[a-z]
+            - /dev/vd[a-z]
+          ThrottleReadBps: 50M
+          ThrottleWriteBps: 10M
+          ThrottleReadIOPS: 10k
+          ThrottleWriteIOPS: 5k
+
+      HighPrioFullSpeed:
+        - Devices:
+            - /dev/sd[a-z]
+            - /dev/vd[a-z]
+          ThrottleReadBps: 500M
+          ThrottleWriteBps: 200M

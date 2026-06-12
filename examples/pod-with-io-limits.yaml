@@ -3,19 +3,9 @@ kind: Pod
 metadata:
   name: io-limited-pod
   annotations:
-    # Apply I/O limits to all containers in this pod.
-    # Limit /dev/sda to 1000 read IOPS, 500 write IOPS, and 50 MB/s write bandwidth.
-    io-limits.noderesource.dev: |
-      {
-        "devices": [
-          {
-            "path": "/dev/sda",
-            "riops": 1000,
-            "wiops": 500,
-            "wbps": 52428800
-          }
-        ]
-      }
+    # Apply the "LowPrioThrottled" blockio class to all containers in this pod.
+    # Classes are defined in the plugin's ConfigMap.
+    io-limits.noderesource.dev: LowPrioThrottled
 spec:
   containers:
     - name: app
@@ -27,11 +17,9 @@ kind: Pod
 metadata:
   name: per-container-io-limits
   annotations:
-    # Different limits for different containers.
-    io-limits.noderesource.dev/container.writer: |
-      {"devices": [{"path": "/dev/sda", "wbps": 10485760, "wiops": 200}]}
-    io-limits.noderesource.dev/container.reader: |
-      {"devices": [{"path": "/dev/sda", "rbps": 52428800, "riops": 1000}]}
+    # Different classes for different containers.
+    io-limits.noderesource.dev/container.writer: LowPrioThrottled
+    io-limits.noderesource.dev/container.reader: HighPrioFullSpeed
 spec:
   containers:
     - name: writer

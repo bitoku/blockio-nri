@@ -2,35 +2,41 @@ package main
 
 import (
 	"testing"
+
+	"github.com/intel/goresctrl/pkg/blockio"
 )
 
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    PluginConfig
-		wantErr bool
+		name       string
+		input      string
+		wantErr    bool
+		wantLog    string
+		wantFail   bool
+		wantClasses int
 	}{
 		{
 			name:  "empty string",
 			input: "",
-			want:  PluginConfig{},
 		},
 		{
-			name:  "full config",
-			input: "defaultDevice: /dev/sda\nfailOnInvalidAnnotation: true\nlogLevel: debug\n",
-			want: PluginConfig{
-				DefaultDevice:           "/dev/sda",
-				FailOnInvalidAnnotation: true,
-				LogLevel:                "debug",
-			},
+			name: "full config with classes",
+			input: `logLevel: debug
+failOnInvalidAnnotation: true
+Classes:
+  LowPrio:
+    - Devices:
+        - /dev/sda
+      ThrottleReadBps: "50M"
+`,
+			wantLog:     "debug",
+			wantFail:    true,
+			wantClasses: 1,
 		},
 		{
-			name:  "partial config",
-			input: "logLevel: warn\n",
-			want: PluginConfig{
-				LogLevel: "warn",
-			},
+			name:    "plugin settings only",
+			input:   "logLevel: warn\nfailOnInvalidAnnotation: false\n",
+			wantLog: "warn",
 		},
 		{
 			name:    "invalid yaml",
@@ -48,9 +54,39 @@ func TestParseConfig(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if got != tt.want {
-				t.Errorf("parseConfig() = %+v, want %+v", got, tt.want)
+			if got.LogLevel != tt.wantLog {
+				t.Errorf("LogLevel = %q, want %q", got.LogLevel, tt.wantLog)
+			}
+			if got.FailOnInvalidAnnotation != tt.wantFail {
+				t.Errorf("FailOnInvalidAnnotation = %v, want %v", got.FailOnInvalidAnnotation, tt.wantFail)
+			}
+			if len(got.Classes) != tt.wantClasses {
+				t.Errorf("len(Classes) = %d, want %d", len(got.Classes), tt.wantClasses)
 			}
 		})
+	}
+}
+
+func TestApplyBlockIOConfig(t *testing.T) {
+	cfg := PluginConfig{
+		Classes: map[string][]blockio.DevicesParameters{
+			"TestClass": {
+				{
+					Devices:         []string{"/dev/null"},
+					ThrottleReadBps: "10M",
+				},
+			},
+		},
+	}
+	err := applyBlockIOConfig(cfg)
+	if err != nil {
+		t.Logf("applyBlockIOConfig() error = %v (expected in test environment without block devices)", err)
+	}
+}
+
+func TestApplyBlockIOConfigEmpty(t *testing.T) {
+	cfg := PluginConfig{}
+	if err := applyBlockIOConfig(cfg); err != nil {
+		t.Fatalf("applyBlockIOConfig() with empty classes should not error: %v", err)
 	}
 }

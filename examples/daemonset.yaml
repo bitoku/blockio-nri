@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nri-iops
+  labels:
+    app: nri-iops
+spec:
+  selector:
+    matchLabels:
+      app: nri-iops
+  template:
+    metadata:
+      labels:
+        app: nri-iops
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+        - name: nri-iops
+          image: quay.io/cri-o/nri-iops:latest
+          args:
+            - -config=/etc/nri-iops/nri-iops.conf
+            - -plugin-name=nri-iops
+            - -plugin-idx=90
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nri-iops
+              readOnly: true
+            - name: nri-socket
+              mountPath: /var/run/nri/nri.sock
+            - name: dev
+              mountPath: /dev
+              readOnly: true
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: config
+          configMap:
+            name: nri-iops-config
+        - name: nri-socket
+          hostPath:
+            path: /var/run/nri/nri.sock
+            type: Socket
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
