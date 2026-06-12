@@ -1,0 +1,12 @@
+# Compiled binaries
+nri-iops
+90-nri-iops
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out

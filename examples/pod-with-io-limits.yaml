@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: io-limited-pod
+  annotations:
+    # Apply I/O limits to all containers in this pod.
+    # Limit /dev/sda to 1000 read IOPS, 500 write IOPS, and 50 MB/s write bandwidth.
+    io-limits.noderesource.dev: |
+      {
+        "devices": [
+          {
+            "path": "/dev/sda",
+            "riops": 1000,
+            "wiops": 500,
+            "wbps": 52428800
+          }
+        ]
+      }
+spec:
+  containers:
+    - name: app
+      image: busybox
+      command: ["sleep", "infinity"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: per-container-io-limits
+  annotations:
+    # Different limits for different containers.
+    io-limits.noderesource.dev/container.writer: |
+      {"devices": [{"path": "/dev/sda", "wbps": 10485760, "wiops": 200}]}
+    io-limits.noderesource.dev/container.reader: |
+      {"devices": [{"path": "/dev/sda", "rbps": 52428800, "riops": 1000}]}
+spec:
+  containers:
+    - name: writer
+      image: busybox
+      command: ["sleep", "infinity"]
+    - name: reader
+      image: busybox
+      command: ["sleep", "infinity"]
